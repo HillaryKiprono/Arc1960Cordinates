@@ -3,6 +3,7 @@ package com.sulisea.arc1960cordinates
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.location.Geocoder
 import android.location.Location
 import android.os.Build
 import androidx.annotation.RequiresApi
@@ -41,6 +42,8 @@ import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import kotlin.math.roundToInt
 import org.locationtech.proj4j.*
+import java.io.IOException
+import java.util.Locale
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
@@ -52,6 +55,7 @@ fun LocationScreen(
     var location by remember { mutableStateOf<Location?>(null) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var address by remember { mutableStateOf<String?>(null) }
 
     val hasLocationPermission = remember {
         ContextCompat.checkSelfPermission(
@@ -84,6 +88,20 @@ fun LocationScreen(
             fusedLocationClient.getCurrentLocation(priority, cancellationToken.token)
                 .addOnSuccessListener { currentLocation ->
                     location = currentLocation
+                    // Get address from coordinates
+                    try {
+                        val geocoder = Geocoder(context, Locale.getDefault())
+                        val addresses = geocoder.getFromLocation(
+                            currentLocation.latitude,
+                            currentLocation.longitude,
+                            1
+                        )
+                        address = addresses?.firstOrNull()?.getAddressLine(0)
+                    } catch (e: IOException) {
+                        errorMessage = "Error getting address: ${e.message}"
+                    } catch (e: IllegalArgumentException) {
+                        errorMessage = "Invalid coordinates for geocoding"
+                    }
                     isLoading = false
                 }
                 .addOnFailureListener { exception ->
@@ -165,6 +183,26 @@ fun LocationScreen(
             )
 
             // Convert to Arc 1960 (UTM Zone 37S)
+            // Display address if available
+            address?.let { streetAddress ->
+                Spacer(modifier = Modifier.height(16.dp))
+                Divider()
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Address",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+                Text(
+                    text = streetAddress,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                Divider()
+            }
+
             // Convert to Arc 1960 (UTM Zone 37S)
             val arc1960Coords = convertToArc1960(lat, lng)
             if (arc1960Coords != null) {
